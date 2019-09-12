@@ -12,21 +12,26 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using AngleSharp.XPath;
+using static AbotTest.UtilityForNewsWeek;
+
 
 namespace AbotTest
 {
-  
+
 
     public class Program
     {
+        public const string PAGEURL = "https://www.newsweekjapan.jp";
 
-        static List<Article> Articles = new List<Article>();
+        public static List<Article> Articles = new List<Article>();
         static List<Author> Authors = new List<Author>();
-        static List<Blog> Blogs = new List<Blog>();
+        public static List<Blog> Blogs = new List<Blog>();
+        public static List<Category> Categories;
         static List<string> KnownUrls = new List<string>();
-        static List<string> FreshUrls = new List<string>();
-        static List<string> Categories = new List<string>();
-        
+        static List<string> CategoryPaths = new List<string>();
+
+
 
 
         static async Task Main(string[] args)
@@ -41,32 +46,60 @@ namespace AbotTest
 
             Log.Logger.Information("Demo starting up!");
 
-            DaoUrl.GetAllKnownUrls(ref KnownUrls);
-            Log.Logger.Information("known urls was loaded from the database");
+            InitProgram();
 
-            var blogs =  UtilityForNewsWeek.ScrapeBlogs("https://www.newsweekjapan.jp/column/");
-            foreach (Blog blog in blogs) Console.WriteLine(blog.BlogName);
+          
 
+           Article article =  Scraper.ScrapeContents("/stories/world/2019/09/post-12983.php");
+            // foreach (Article article in Articles) Console.WriteLine(article.Contents);
 
-            //データベースへのアクセスロジックが漏れてしまうのでこれはだめ
-            //AccessDB();
-            
-
-           // await CrawlerForNewsWeek(uri);
+            //await CrawlerForNewsWeek(uri);
             //await DemoSinglePageRequest();
 
-           
+            Console.ReadLine();
 
         }
 
-        
+        private static void InitProgram()
+        {
+            //既知のURLをデータベースからロード
+            DaoUrl.GetAllKnownUrls(ref KnownUrls);
+            Debug.WriteLine("Known urls are loaded from the database");
+
+            var blogs = DaoBlog.GetAllBlogs();
+            if (blogs.Count == 0)
+            {
+                Debug.WriteLine("Blog table is empty");
+                Blogs = Scraper.ScrapeBlogs("https://www.newsweekjapan.jp/column/");
+                DaoBlog.InitBlogDB(Blogs);
+                Debug.WriteLine("Blog table was initialized");
+            }
+            else
+            {
+                Debug.WriteLine("Blog table is already filled");
+            }
+
+            Categories = DaoCategory.GetAllCategory();
+            if(Categories.Count == 0)
+            {
+                Debug.WriteLine("category table is empty");
+                DaoCategory.InitCategoryDB(CreateCategoryList());
+                Debug.WriteLine("Category table was initialized");
+                Categories = CreateCategoryList();
+            }
+            else
+            {
+                Debug.WriteLine("Category table is already filled");
+                
+            }
+        }
 
         private static async Task CrawlerForNewsWeek(string uri)
         {
             var config = new CrawlConfiguration
             {
-                MaxPagesToCrawl = 100, //Only crawl 10 pages
-                MinCrawlDelayPerDomainMilliSeconds = 1000, //Wait this many millisecs between requests
+                MaxPagesToCrawl = 10,          
+                MinCrawlDelayPerDomainMilliSeconds = 1000,
                 CrawlTimeoutSeconds = 500,
                 MaxConcurrentThreads = 10,
                 MaxCrawlDepth = 1,
@@ -89,7 +122,12 @@ namespace AbotTest
 
         }
         
-      
+        
+        /// <summary>
+        /// 読み込んだページの処理はここで完結させる
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private static void crawler_ProcessPageCrawlCompleted(object sender, PageCrawlCompletedArgs e)
         {
             CrawledPage crawledPage = e.CrawledPage;
@@ -102,18 +140,27 @@ namespace AbotTest
             {
                 Console.WriteLine("Crawl of page succeeded {0}", crawledPage.Uri.AbsoluteUri);
                 var absolutePath = e.CrawledPage.Uri.AbsolutePath.ToString();
-
-                //AngleSharp
+                                
                 var doc = e.CrawledPage.AngleSharpHtmlDocument;
-                var node = doc.Body.
+                
 
                 if (KnownUrls.Contains(absolutePath))
                 {
-                    Debug.WriteLine($"Known url:{absolutePath}");
+                    Debug.WriteLine($"It is already known url:{absolutePath}");
                 }
                 else
                 {
                     KnownUrls.Add(absolutePath);
+
+                    //本文の取得を始めるには、一番最初のページであり、カテゴリもしくは（ブログ）に所属し、.phpファイルである必要がある。
+                    if (CheckIfArticleAndFirstPage(e.CrawledPage, doc)
+                        && WithinCategory(CategoryPaths, absolutePath)
+                        || WithinBlog(Blogs, absolutePath))
+                    {
+                        //Article article = Scraper.ScrapeContents(e.CrawledPage.Uri.ToString());
+
+                        
+                    }
                 }
 
             }
@@ -163,7 +210,7 @@ namespace AbotTest
     public static class UtilityForNewsWeek
     {
         
-        public static string ExtranctSecondLevelString(string url, string rootUrl)
+        public static string ExtractSecondLevelString(string url, string rootUrl)
         {
             string category;
             //Root直下の
@@ -173,11 +220,18 @@ namespace AbotTest
             return url;
         }
 
-        //Because the article table only needs .php link
-        public static bool CheckIfArticleFirstPage(CrawledPage crawledPage, AngleSharp.Html.Dom.IHtmlDocument doc)
+        
+        /// <summary>
+        /// .phpファイルでありなおかつ li class='prev' を持たないことで、記事の Pagination 1ページ目であることを確認する。
+        /// </summary>
+        /// <param name="crawledPage"></param>
+        /// <param name="doc"></param>
+        /// <returns></returns>
+        public static bool CheckIfArticleAndFirstPage(CrawledPage crawledPage, AngleSharp.Html.Dom.IHtmlDocument doc)
         {
+            
             if (crawledPage.Uri.AbsolutePath.EndsWith(".php") 
-                && doc.Body.
+                && doc.Body.SelectSingleNode("//div[@class = 'contentPanes']//li[@class = 'prev']") == null)
             {
                 
                 return true;
@@ -186,7 +240,7 @@ namespace AbotTest
 
         }
 
-        public static bool HasCategory(List<string> categories, string path)
+        public static bool WithinCategory(List<string> categories, string path)
         {
             if (categories.Contains(path))
             {
@@ -195,14 +249,22 @@ namespace AbotTest
             return false;
         }
 
+        public static bool WithinBlog(List<Blog> blogs, string path)
+        {
+            foreach(Blog blog in blogs)
+            {
+                if (path.StartsWith(blog.Relative_Path))
+                {
+                    return false;
+                   
+                }
+            }
+            return true;
+        }
 
-        /// <summary>
-        /// 一つの記事について次のページを取得
-        /// 最後のページ(次がない)ならNullを返す
-        /// </summary>
-        /// <param name="page"></param>
-        /// <returns></returns>
-        public static string GetNextURL(string page)
+
+     
+        public static string GetNextURLofPage(string page)
         {
             HtmlWeb web = new HtmlWeb();           
             var doc = web.Load(page);
@@ -210,42 +272,39 @@ namespace AbotTest
                         
             if (nextUrlNode == null)
             {
-                page = null;
-            }
-                       
+                return null;
+                
+            }                       
             else if (nextUrlNode.FirstChild.NextSibling.Name == "a")
             {
                 string formerUrl = page;
                 page = nextUrlNode.FirstChild.NextSibling.GetAttributeValue("href", null);
-                //httpで始まっていない場合は
+                //次ページへのリンクが https で始まっていない場合は末尾を書き換える必要がある。
                 if (!page.StartsWith("http"))
                 {
                     Regex reg = new Regex(@"_\d{1,2}.php");
                     Match match = reg.Match(page);
-                    reg = new Regex(@"_\d{1,2}.php");
+                    reg = new Regex(@"(_\d{1,2}.php)|.php");
                     formerUrl = reg.Replace(formerUrl, "");
                     page = formerUrl + match.Value;
+                    return page;
 
                 }
+                else
+                {
+                    return page;
+                }
+                
             }
-            else page = null;
+            else return null;
+                       
 
-            Debug.WriteLine(page);
-
-            return page;
+            
         }
 
-        public static bool CheckIfFirstPage(HtmlDocument doc)
-        {
-            if (doc.DocumentNode.SelectSingleNode("//li[@class = 'prev']") != null)
-            {
-                return true;
-            }
-            return false;
-        }
+    
 
-
-        public static List<Category> InitCategoryList()
+        public static List<Category> CreateCategoryList()
         {
             List<Category> categories = new List<Category>();
 
@@ -269,28 +328,7 @@ namespace AbotTest
         }
 
 
-        public static List<Blog> ScrapeBlogs(string url)
-        {
-            List<Blog> blogs = new List<Blog>();
 
-            HtmlWeb web = new HtmlWeb();
-            var doc = web.Load(url);
-            var blogsNodes = doc.DocumentNode.SelectNodes("//*[@class = 'author short']");
-
-            foreach(HtmlNode node in blogsNodes)
-            {
-                Blog blog = new Blog();
-
-                blog.BlogName = node.SelectSingleNode(".//div[@class='entryAuthor']").FirstChild.InnerText + " / "
-                    + node.SelectSingleNode(".//div[@class='entryAuthor']").FirstChild.FirstChild.InnerText;
-                blog.Relative_Path = node.FirstChild.FirstChild.GetAttributeValue("href", "");
-                             
-                blogs.Add(blog);
-               
-            }
-            return blogs;
-            
-        }
 
 
 

@@ -12,12 +12,13 @@ namespace AbotTest
         public int ArticleId { get; set; }
         public string Title { get; set; }
         public string Contents { get; set; }
-        public DateTime ArticleDate { get; set; }
+        public DateTime PublishDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
         public string Url { get; set; }
 
         public int CategoryId { get; set; }
         public int AuthorId { get; set; }
-        public int AuthorId2 { get; set; }
+        public int BlogId { get; set; }
 
     }
 

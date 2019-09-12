@@ -127,3 +127,5 @@ D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\HtmlAgilityPack.pdb
 D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\HtmlAgilityPack.xml
 D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\JetBrains.Annotations.dll
 D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\JetBrains.Annotations.xml
+D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\AngleSharp.XPath.dll
+D:\VS Projects\C-Sharp Practice\AbotTest\bin\Debug\AngleSharp.XPath.xml

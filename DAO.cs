@@ -2,6 +2,7 @@
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -154,50 +155,173 @@ namespace AbotTest
             }
         }
 
+        public static List<Category> GetAllCategory()
+        {
+            List<Category> categories = new List<Category>();
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
 
+            try
+            {
 
+                conn.Open();
+                string sql = string.Format($"SELECT * FROM category");
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                MySqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    Category category = new Category()
+                    {
+                        CategoryId = int.Parse(reader.GetString(1)),
+                        Name = reader.GetString(0),
+                        Relative_Path = reader.GetString(2)
+                    };
+                    categories.Add(category);
+                }
+                conn.Close();
+                return categories;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return categories;
 
-      
-
-
-
-
-        //databaseへのアクセスロジックがはみ出してしまうのでこれはだめ
-        //public class DataAccessObject
-        //{
-        //    static readonly string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
-        //    static MySqlConnection conn;
-
-        //    public static bool AccessDB()
-        //    {
-        //        conn = new MySqlConnection(connStr);
-        //        try
-        //        {
-        //            conn.Open();
-        //            return true;
-        //        }
-        //        catch (Exception e)
-        //        {
-        //            conn.Close();
-        //            Log.Logger.Information(e.ToString());
-        //            return false;
-        //        }
-        //    }
-
-        //    public static void CloseDB()
-        //    {
-        //        if (conn != null)
-        //        {
-        //            conn.Close();
-        //            Debug.WriteLine("DB was closed");
-        //        }
-        //        else
-        //        {
-        //            Debug.WriteLine("MySqlConnection is null");
-        //        }
-        //    }
-        //}
+            }
+        }
 
     }
 
+    public class DaoBlog
+    {
+        public static bool InitBlogDB(List<Blog> blogs)
+        {
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                foreach (Blog blog in blogs)
+                {
+                    Debug.WriteLine("inserting to blog database");
+                    string sql = string.Format($"INSERT INTO blog (name, relative_path) VALUES ('{blog.BlogName}', '{blog.Relative_Path}')");
+                    MySqlCommand cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+                }
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+
+            }
+        }
+
+        public static List<Blog> GetAllBlogs()
+        {
+            List<Blog> blogs = new List<Blog>();
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+
+                conn.Open();
+                string sql = string.Format($"SELECT * FROM blog");
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                MySqlDataReader reader = cmd.ExecuteReader();
+
+
+                while (reader.Read())
+                {
+                    Blog blog = new Blog();
+                    blog.BlogId = int.Parse(reader.GetString(2));
+                    blog.BlogName = reader.GetString(0);
+                    blog.Relative_Path = reader.GetString(1);
+
+                    blogs.Add(blog);
+                }
+
+                conn.Close();
+                return blogs;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return blogs;
+                
+            }
+        }
+
+    }
+
+    public class DaoAuthor
+    {
+        public static bool InsertAuthor(Author author)
+        {
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                
+                    string sql = string.Format($"INSERT INTO author (name, description) VALUES ('{author.AuthorName}', '{author.AuthorDescription}')");
+                    MySqlCommand cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+
+            }
+        }
+
+        public static List<Author> GetAllAuthors()
+        {
+            List<Author> authors = new List<Author>();
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+
+                conn.Open();
+                string sql = string.Format($"SELECT * FROM author");
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                MySqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    Author author = new Author()
+                    {
+                        AuthorId = int.Parse(reader.GetString(1)),
+                        AuthorName = reader.GetString(0),
+                        AuthorDescription = reader.GetString(2)
+                    };
+                    authors.Add(author);
+                }
+                conn.Close();
+                return authors;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return authors;
+
+            }
+        }
+
+    }
 }
