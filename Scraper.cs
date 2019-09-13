@@ -1,8 +1,13 @@
-﻿using HtmlAgilityPack;
+﻿using Abot2.Poco;
+using AngleSharp.Html.Dom;
+using AngleSharp.Html.Parser;
+using AngleSharp.XPath;
+using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -21,7 +26,7 @@ namespace AbotTest
 
             HtmlWeb web = new HtmlWeb();
             var doc = web.Load(url);
-            var blogsNodes = doc.DocumentNode.SelectNodes("//*[@class = 'author short']");
+            var blogsNodes = doc.DocumentNode.SelectNodes("/[@class = 'author short']");
 
             foreach (HtmlNode node in blogsNodes)
             {
@@ -38,10 +43,11 @@ namespace AbotTest
 
         }
 
-        public static Article ScrapeContents(string absolutePath)
+        public static Article ScrapeArticle(string absolutePath)
         {
             string url = AbotTest.Program.PAGEURL + absolutePath;
             Article article = new Article();
+
 
             HtmlWeb web = new HtmlWeb();
             var node = web.Load(url).DocumentNode;
@@ -52,7 +58,8 @@ namespace AbotTest
             Console.WriteLine(article.Title);
 
             //extract author
-
+            //var authorName = ScrapeAuthorName(node);
+            //if(IsNewAuthor(AbotTest.Program.Authors, authorName))
 
             //extract publish date
             article.PublishDate = FormatToDateTime(node.SelectSingleNode("html/head/meta[@property= 'article:published_time']")
@@ -82,26 +89,34 @@ namespace AbotTest
                     result += p.InnerText;
                     result += "\n";
                 }
-                url = GetNextURLofPage(url);
+                url = GetNextPageUrl(url);
 
 
             }
             article.Contents = result;
-
-
-
-
-
+                                          
             return article;
             
         }
 
-        public static Author  ScrapeAuthor(HtmlNode node)
+        public static string ScrapeAuthorName(CrawledPage crawledPage)
         {
-            Author author = new Author();
-            author.AuthorName = node.SelectSingleNode("html/head/meta[@property= 'cXenseParse:author']").GetAttributeValue("content", "no name");
-            return author;
+            var doc = crawledPage.AngleSharpHtmlDocument;
+            string name;
+            var node = doc.QuerySelector("meta[property='cXenseParse:author']");
+            if (node == null) { name = null; }
+            else { name = node.GetAttribute("content"); }
+            
+            if(name == null)
+            {
+                Console.WriteLine("The extracted author name is null!!");
+                return null;
+            }
+            return name;
+            
         }
+
+      
 
 
         //カテゴリになければコラム(ブログ)
@@ -116,8 +131,11 @@ namespace AbotTest
             }
             else
             {
+                
                 var blogIndex = blogs.FindIndex(n => n.Relative_Path.Equals(categoryPath));
-                if(blogIndex >= 0)
+                Debug.WriteLine($"category path is : {categoryPath}");
+                Debug.WriteLine($"blogIndex is : {blogIndex}");
+                if (blogIndex >= 0)
                 {
                     //カテゴリテーブル内の”コラム”の行のIDを取得するため
                     var indexForColumn = categories.FindIndex(n => n.Relative_Path.Equals("/column/"));

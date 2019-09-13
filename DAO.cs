@@ -12,8 +12,8 @@ namespace AbotTest
    
     public class DaoArticle
     {
-        
-        public static bool InsertUrl(string url)
+
+        public static bool InsertArticles(List<Article> articles)
         {
 
 
@@ -24,9 +24,13 @@ namespace AbotTest
             try
             {
                 conn.Open();
-                string sql = string.Format($"INSERT INTO article (title) VALUE ('{url}')");
-                MySqlCommand cmd = new MySqlCommand(sql, conn);
-                cmd.ExecuteNonQuery();
+                foreach (Article article in articles) {
+                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date, modified_date) VALUES ({article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}', '{article.ModifiedDate})");
+                    var cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+
+                }
+
                 conn.Close();
                 return true;
             }
@@ -64,7 +68,7 @@ namespace AbotTest
     public class DaoUrl
     {
 
-        public static bool InsertFreshUrls(List<string> freshUrls)
+        public static bool InsertUrls(List<string> freshUrls)
         {
             string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
             MySqlConnection conn = new MySqlConnection(connStr);
@@ -123,6 +127,31 @@ namespace AbotTest
             return urlList;
 
         }
+
+        public static bool TruncateUrlTable()
+        {
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();                
+                string sql = string.Format($"truncate table url");
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                cmd.ExecuteNonQuery();              
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+            }
+        }
+
+
     }
 
 
@@ -288,6 +317,35 @@ namespace AbotTest
             }
         }
 
+        public static bool InsertAllAuthors(List<Author> authors)
+        {
+            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                foreach(Author author in authors)
+                {
+                    string sql = string.Format($"INSERT INTO author (name, description) VALUES ('{author.AuthorName}', '{author.AuthorDescription}')");
+                    MySqlCommand cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+
+                }
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+
+            }
+        }
+
+
         public static List<Author> GetAllAuthors()
         {
             List<Author> authors = new List<Author>();
@@ -305,8 +363,8 @@ namespace AbotTest
                 {
                     Author author = new Author()
                     {
-                        AuthorId = int.Parse(reader.GetString(1)),
-                        AuthorName = reader.GetString(0),
+                        AuthorId = int.Parse(reader.GetString(0)),
+                        AuthorName = reader.GetString(1),
                         AuthorDescription = reader.GetString(2)
                     };
                     authors.Add(author);
@@ -324,4 +382,6 @@ namespace AbotTest
         }
 
     }
+
+    
 }

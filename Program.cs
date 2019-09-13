@@ -25,13 +25,14 @@ namespace AbotTest
         public const string PAGEURL = "https://www.newsweekjapan.jp";
 
         public static List<Article> Articles = new List<Article>();
-        static List<Author> Authors = new List<Author>();
+        public static List<Author> Authors;
         public static List<Blog> Blogs = new List<Blog>();
         public static List<Category> Categories;
         static List<string> KnownUrls = new List<string>();
         static List<string> CategoryPaths = new List<string>();
 
-
+        private static int urlAddedCount = 0;
+        private static readonly int urlAddedCountMax = 25;
 
 
         static async Task Main(string[] args)
@@ -47,16 +48,13 @@ namespace AbotTest
             Log.Logger.Information("Demo starting up!");
 
             InitProgram();
+         
+            
+             await DemoSimpleCrawler(uri);
 
-          
 
-           Article article =  Scraper.ScrapeContents("/stories/world/2019/09/post-12983.php");
-            // foreach (Article article in Articles) Console.WriteLine(article.Contents);
-
-            //await CrawlerForNewsWeek(uri);
-            //await DemoSinglePageRequest();
-
-            Console.ReadLine();
+            DaoUrl.TruncateUrlTable();
+            DaoUrl.InsertUrls(KnownUrls);
 
         }
 
@@ -65,6 +63,9 @@ namespace AbotTest
             //既知のURLをデータベースからロード
             DaoUrl.GetAllKnownUrls(ref KnownUrls);
             Debug.WriteLine("Known urls are loaded from the database");
+
+            //既知のAuthorをデータベースからロード
+            Authors = DaoAuthor.GetAllAuthors();
 
             var blogs = DaoBlog.GetAllBlogs();
             if (blogs.Count == 0)
@@ -94,28 +95,26 @@ namespace AbotTest
             }
         }
 
-        private static async Task CrawlerForNewsWeek(string uri)
+        private static async Task DemoSimpleCrawler(string uri)
         {
             var config = new CrawlConfiguration
             {
-                MaxPagesToCrawl = 10,          
+                MaxPagesToCrawl = 100,          
                 MinCrawlDelayPerDomainMilliSeconds = 1000,
                 CrawlTimeoutSeconds = 500,
                 MaxConcurrentThreads = 10,
-                MaxCrawlDepth = 1,
+                MaxCrawlDepth = 10,
             //crawlConfig.ConfigurationExtensions.Add("SomeCustomConfigValue1", "1111"),
             //crawlConfig.ConfigurationExtensions.Add("SomeCustomConfigValue2", "2222"),
 
             };
-            var crawler = new PoliteWebCrawler();
+            var crawler = new PoliteWebCrawler(config);
        
 
 
-            crawler.PageCrawlStarting += crawler_ProcessPageCrawlStarting;
+           
             crawler.PageCrawlCompleted += crawler_ProcessPageCrawlCompleted;
-            crawler.PageCrawlDisallowed += crawler_PageCrawlDisallowed;
-            crawler.PageLinksCrawlDisallowed += crawler_PageLinksCrawlDisallowed;
-
+          
             var crawlResult = await crawler.CrawlAsync(new Uri(uri));
 
             
@@ -132,69 +131,68 @@ namespace AbotTest
         {
             CrawledPage crawledPage = e.CrawledPage;
 
-            if (crawledPage.HttpRequestException != null || crawledPage.HttpResponseMessage.StatusCode != HttpStatusCode.OK)
-                Console.WriteLine("Crawl of page failed {0}", crawledPage.Uri.AbsoluteUri);
-            ////////////////////////////////////////////////////////////////////////////////
-            //////////////////////Article に追加//////////////////////
+            //if (crawledPage.HttpRequestException != null || crawledPage.HttpResponseMessage.StatusCode != HttpStatusCode.OK)
+            //{
+            //    Console.WriteLine("Crawl of page failed {0}", crawledPage.Uri.AbsoluteUri);
+
+            //}
+            //else
+            //{
+            Console.WriteLine("Crawl of page succeeded {0}", crawledPage.Uri.AbsoluteUri);
+            var absolutePath = e.CrawledPage.Uri.AbsolutePath.ToString();
+
+            var doc = e.CrawledPage.AngleSharpHtmlDocument;
+
+            //既出のURLである場合は処理をスキップ
+            if (KnownUrls.Contains(absolutePath))
+            {
+                Log.Logger.Information($"It is already known url:{absolutePath}");
+            }
             else
             {
-                Console.WriteLine("Crawl of page succeeded {0}", crawledPage.Uri.AbsoluteUri);
-                var absolutePath = e.CrawledPage.Uri.AbsolutePath.ToString();
-                                
-                var doc = e.CrawledPage.AngleSharpHtmlDocument;
-                
+                KnownUrls.Add(absolutePath);
+                urlAddedCount++;
 
-                if (KnownUrls.Contains(absolutePath))
-                {
-                    Debug.WriteLine($"It is already known url:{absolutePath}");
-                }
-                else
-                {
-                    KnownUrls.Add(absolutePath);
 
-                    //本文の取得を始めるには、一番最初のページであり、カテゴリもしくは（ブログ）に所属し、.phpファイルである必要がある。
-                    if (CheckIfArticleAndFirstPage(e.CrawledPage, doc)
-                        && WithinCategory(CategoryPaths, absolutePath)
-                        || WithinBlog(Blogs, absolutePath))
+
+                //ArticleのScrapingを始める条件は、Pagenationの1ページ目であり、カテゴリかブログに所属していること。
+                if (IfArticleAndIfFirstPage(e.CrawledPage, doc)
+                    &&( CanCategorize(CategoryPaths, absolutePath)
+                    || IsBlogEntry(Blogs, absolutePath)))
+                {
+                    //執筆者名から既出判定に従いデータベースを更新
+                    string authorName = Scraper.ScrapeAuthorName(e.CrawledPage);
+                    if (IsNewAuthor(Authors, authorName))
                     {
-                        //Article article = Scraper.ScrapeContents(e.CrawledPage.Uri.ToString());
-
-                        
+                        Author author = new Author() { AuthorName = authorName };
+                        DaoAuthor.InsertAuthor(author);
+                        Authors = DaoAuthor.GetAllAuthors();
                     }
+                    
+                    Article article = Scraper.ScrapeArticle(absolutePath);
+
+                    var authorIndex = Authors.FindIndex(n => n.AuthorName.Equals(authorName));
+                    article.AuthorId = Authors[authorIndex].AuthorId;                    
+                }
+
+                if(urlAddedCount >= urlAddedCountMax)
+                {
+                    DaoArticle.InsertArticles(Articles);
+                    DaoUrl.InsertUrls(KnownUrls);
+                    
                 }
 
             }
-            //////////////////////////////////////////////////////////////////////////////
-
+    
             if (string.IsNullOrEmpty(crawledPage.Content.Text))
                 Console.WriteLine("Page had no content {0}", crawledPage.Uri.AbsoluteUri);
 
            
-            var htmlAgilityPackDocument = crawledPage.AngleSharpHtmlDocument; //Html Agility Pack parser
-            var angleSharpHtmlDocument = crawledPage.AngleSharpHtmlDocument; //AngleSharp parser
+            //var htmlAgilityPackDocument = crawledPage.AngleSharpHtmlDocument; //Html Agility Pack parser
+            //var angleSharpHtmlDocument = crawledPage.AngleSharpHtmlDocument; //AngleSharp parser
             
         }
-
-
-
-        private static void crawler_ProcessPageCrawlStarting(object sender, PageCrawlStartingArgs e)
-        {
-            PageToCrawl pageToCrawl = e.PageToCrawl;
-            Console.WriteLine("About to crawl link {0} which was found on page {1}", pageToCrawl.Uri.AbsoluteUri, pageToCrawl.ParentUri.AbsoluteUri);
-        }
-
-        private static void crawler_PageLinksCrawlDisallowed(object sender, PageLinksCrawlDisallowedArgs e)
-        {
-            CrawledPage crawledPage = e.CrawledPage;
-            Console.WriteLine("Did not crawl the links on page {0} due to {1}", crawledPage.Uri.AbsoluteUri, e.DisallowedReason);
-        }
-
-        private static void crawler_PageCrawlDisallowed(object sender, PageCrawlDisallowedArgs e)
-        {
-            PageToCrawl pageToCrawl = e.PageToCrawl;
-            Console.WriteLine("Did not crawl page {0} due to {1}", pageToCrawl.Uri.AbsoluteUri, e.DisallowedReason);
-        }
-
+                            
     }
 
 
@@ -210,15 +208,15 @@ namespace AbotTest
     public static class UtilityForNewsWeek
     {
         
-        public static string ExtractSecondLevelString(string url, string rootUrl)
-        {
-            string category;
-            //Root直下の
-            Regex reg = new Regex(@"(?<=https://www.newsweekjapan.jp/)[a-z]+");
-            category = reg.Match(url).ToString();
-            //URLに従ってファーストカテゴリを決める
-            return url;
-        }
+        //public static string ExtractSecondLevelString(string url, string rootUrl)
+        //{
+        //    string category;
+        //    //Root直下の
+        //    Regex reg = new Regex(@"(?<=https://www.newsweekjapan.jp/)[a-z]+");
+        //    category = reg.Match(url).ToString();
+        //    //URLに従ってファーストカテゴリを決める
+        //    return url;
+        //}
 
         
         /// <summary>
@@ -227,11 +225,11 @@ namespace AbotTest
         /// <param name="crawledPage"></param>
         /// <param name="doc"></param>
         /// <returns></returns>
-        public static bool CheckIfArticleAndFirstPage(CrawledPage crawledPage, AngleSharp.Html.Dom.IHtmlDocument doc)
+        public static bool IfArticleAndIfFirstPage(CrawledPage crawledPage, AngleSharp.Html.Dom.IHtmlDocument doc)
         {
             
             if (crawledPage.Uri.AbsolutePath.EndsWith(".php") 
-                && doc.Body.SelectSingleNode("//div[@class = 'contentPanes']//li[@class = 'prev']") == null)
+                && doc.Body.SelectSingleNode("//li[@class = 'prev']") == null)
             {
                 
                 return true;
@@ -240,7 +238,7 @@ namespace AbotTest
 
         }
 
-        public static bool WithinCategory(List<string> categories, string path)
+        public static bool CanCategorize(List<string> categories, string path)
         {
             if (categories.Contains(path))
             {
@@ -249,7 +247,7 @@ namespace AbotTest
             return false;
         }
 
-        public static bool WithinBlog(List<Blog> blogs, string path)
+        public static bool IsBlogEntry(List<Blog> blogs, string path)
         {
             foreach(Blog blog in blogs)
             {
@@ -262,9 +260,18 @@ namespace AbotTest
             return true;
         }
 
+        public static bool IsNewAuthor(List<Author> authors, string name)
+        {
+            foreach(Author author in authors)
+            {
+                if (author.AuthorName.Equals(name)) return false;
+            }
+            return true;
+        }
+                
 
      
-        public static string GetNextURLofPage(string page)
+        public static string GetNextPageUrl(string page)
         {
             HtmlWeb web = new HtmlWeb();           
             var doc = web.Load(page);
@@ -279,16 +286,17 @@ namespace AbotTest
             {
                 string formerUrl = page;
                 page = nextUrlNode.FirstChild.NextSibling.GetAttributeValue("href", null);
-                //次ページへのリンクが https で始まっていない場合は末尾を書き換える必要がある。
+                
+                //次ページへのリンクが https で始まっていない場合は末尾の置換が必要
                 if (!page.StartsWith("http"))
                 {
                     Regex reg = new Regex(@"_\d{1,2}.php");
                     Match match = reg.Match(page);
                     reg = new Regex(@"(_\d{1,2}.php)|.php");
                     formerUrl = reg.Replace(formerUrl, "");
-                    page = formerUrl + match.Value;
-                    return page;
 
+                    return formerUrl + match.Value;
+                   
                 }
                 else
                 {
@@ -300,6 +308,12 @@ namespace AbotTest
                        
 
             
+        }
+
+        //Urlが50個になったら一度データベースに入れる
+        public static void UpdateArticleDatabase(int count)
+        {
+
         }
 
     
@@ -328,17 +342,7 @@ namespace AbotTest
         }
 
 
-
-
-
-
-
     }
-
-
-
-
-
 
 
 }
