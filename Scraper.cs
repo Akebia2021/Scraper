@@ -12,12 +12,17 @@ using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using static AbotTest.UtilityForNewsWeek;
+using WebScraper;
+using static WebScraper.UtilityForNewsWeek;
 
-namespace AbotTest
+namespace WebScraper
 {
      public static class Scraper
     {
+        public static void ScrapePage(Predicate<CrawledPage> predicate)
+        {
+            
+        }
 
 
         //Blogテーブルを初期化するのに必要なメソッド（URL構造が特殊なため）
@@ -50,19 +55,13 @@ namespace AbotTest
         /// </summary>
         /// <param name="absolutePath"></param>
         /// <returns></returns>
-        public static Article ScrapeArticle(string absolutePath)
+        public static Article ScrapeArticle(CrawledPage crawled)
         {
-            string url = AbotTest.Program.PAGEURL + absolutePath;
+           
             Article article = new Article();
 
-
-            HtmlWeb web = new HtmlWeb();
-            var node = web.Load(url).DocumentNode;
-            
             //extract title
-            article.Title = node.SelectSingleNode("/html/head/meta[@property = 'og:title'][@content]")
-                .GetAttributeValue("content", "no title");
-            Console.WriteLine(article.Title + " ：：： 記事のタイトルを表示しています(ScrapeArticle Method)");
+            article.Title = ScrapeTitle(crawled);
 
             ////extract author and set AuthorId(nullable)
             //string authorName = Scraper.ScrapeAuthorName(node);
@@ -78,8 +77,8 @@ namespace AbotTest
 
 
             //extract article's date
-            string dateSource = node.SelectSingleNode("//div[@class = 'entryDetailData']/div[@class = 'date']")
-                .InnerText;
+            string dateSource = crawled.AngleSharpHtmlDocument.Body.SelectSingleNode("//div[@class = 'entryDetailData']/div[@class = 'date']")
+                ?.TextContent;
             DateTime publishedTime;
             if (FormatToDateTime(dateSource, out publishedTime)){ }
             else
@@ -98,29 +97,30 @@ namespace AbotTest
                     //    .GetAttributeValue("content", "no datetime"));
 
             //determine category or blog
-            DeterminCategoryIdOrBlogId(absolutePath, ref AbotTest.Program.Categories, ref AbotTest.Program.Blogs,  ref article);
+            DeterminCategoryIdOrBlogId("", ref WebScraper.Program.Categories, ref WebScraper.Program.Blogs,  ref article);
 
+           
             //extract contents
             string result = "";
-            while (url != null)
-            {
+            //while (url != null)
+            //{
 
-                web = new HtmlWeb();
-                var doc = web.Load(url);
-                node = doc.DocumentNode.SelectSingleNode("//div[@class = 'entryDetailBodyBlock']");
-
-
-
-                var nodes = node.SelectNodes("p | h4");
-                foreach (HtmlNode p in nodes)
-                {
-                    result += p.InnerText;
-                    result += "\n";
-                }
-                url = GetNextPageUrl(url);
+            //    web = new HtmlWeb();
+            //    var doc = web.Load(url);
+            //    node = doc.DocumentNode.SelectSingleNode("//div[@class = 'entryDetailBodyBlock']");
 
 
-            }
+
+            //    var nodes = node.SelectNodes("p | h4");
+            //    foreach (HtmlNode p in nodes)
+            //    {
+            //        result += p.InnerText;
+            //        result += "\n";
+            //    }
+            //    url = Utility.GetNextPageUrl(url);
+
+
+            //}
             article.Contents = result;
                                           
             return article;
@@ -145,39 +145,73 @@ namespace AbotTest
             else return node.InnerText;
         }
 
+        /// <summary>
+        /// 要素がなければNullを返す
+        /// </summary>     
+        public static string ScrapeTitle(CrawledPage crawled)
+        {
+
+            var node = crawled.AngleSharpHtmlDocument.Body.SelectSingleNode("//*[@id='content']/div[3]/div[2]/div[1]/div[1]/h3");
+            if (node != null) return node.TextContent;
+
+            return crawled.AngleSharpHtmlDocument.QuerySelector("div.entryDetailHeadline.border_btm.clearfix > h3")?.TextContent;
+        }
+
       
 
-
-        //記事のカテゴリidを決定する（refで渡す）。カテゴリがコラムの場合はblogIdも決定
-        public static void DeterminCategoryIdOrBlogId(string absolutePath, ref List<Category> categories, ref List<Blog> blogs, ref Article article)
+        /// <summary>
+        /// IDが見つからない場合はDebugメッセージを出し Nullを返す
+        /// </summary>        
+        public static int? CalculateCategoryId(CrawledPage crawled, List<Category> categories, List<Blog> blogs)
         {
+            var absPath = crawled.Uri.AbsolutePath;
+            
             Regex reg = new Regex(@"(?!.*/(2))(.+.php)");
-            var categoryPath = reg.Replace(absolutePath, "");
-            var categoryIndex = categories.FindIndex(n => n.Relative_Path.Equals(categoryPath));
-            if(categoryIndex >= 0)
+            var categoryPath = reg.Replace(crawled.Uri.AbsolutePath, "");
+            var categoryIndex = categories.FindIndex(x => x.Relative_Path.Equals(categoryPath));
+
+            //カテゴリに属している場合
+            if (categoryIndex >= 0)
             {
-                article.CategoryId = categories[categoryIndex].CategoryId;
+                return categories[categoryIndex].CategoryId;
             }
+            //カテゴリが無いもしくはコラムに属する場合
             else
             {
-                
-                var blogIndex = blogs.FindIndex(n => n.Relative_Path.Equals(categoryPath));
-                Debug.WriteLine($"absolute path is : {categoryPath}");
-                Debug.WriteLine($"blogIndex is : {blogIndex}");
-                if (blogIndex >= 0)
+                var q = from b in blogs
+                        where b.Relative_Path.Equals(categoryPath)
+                        select b;
+                //クエリ結果の有無は Count() で確かめる
+                if (q.Count() == 1)
                 {
-                    //カテゴリテーブル内の”コラム”の行のIDを取得するため
-                    var indexForColumn = categories.FindIndex(n => n.Relative_Path.Equals("/column/"));
-                    article.CategoryId = categories[indexForColumn].CategoryId;
-
-                    article.BlogId = blogs[blogIndex].BlogId;
+                    var i = from c in categories
+                            where c.Relative_Path.Equals("/column/")
+                            select c.CategoryId;
+                    return i.First<int>();
                 }
                 else
                 {
-                    Console.WriteLine($" {categoryPath} はブログにもカテゴリにも属していないようです！");
-                }
-            }  
+                    Debug.WriteLine("Couldn't find category ID!!!");
+                    return null;
+                }               
+            }          
         }
+
+        /// <summary>
+        /// IDが見つからなければNullを返す
+        /// </summary>       
+        public static int? CalculateBlogId(CrawledPage crawled, List<Blog> blogs)
+        {
+            var absPath = crawled.Uri.AbsolutePath;
+            Regex reg = new Regex(@"(?!.*/(2))(.+.php)");
+            var blogPath = reg.Replace(absPath, "");
+            var q = from b in blogs
+                    where b.Relative_Path.Equals(blogPath)
+                    select b;
+            if (q.Count() == 1) return q.First().BlogId;
+            else return null;
+        }
+                      
 
 
         /// <summary>

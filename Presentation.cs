@@ -3,47 +3,43 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static WebScraper.Program;
 
-namespace AbotTest
+namespace WebScraper
 {
-    class Presentation
+    static class  Presentation
     {
 
-        public void DrawMenu()
+        public static string DecideStartUrl()
         {
             Console.WriteLine("News Siteのスクレイピングを行うプログラムです。Abotクローラが全てのURLを走査し、記事をダウンロードします。" +
                 "一度ダウンロードした記事を再度ダウンロードすることはありません。");
-            Console.WriteLine("MENU");
-            Console.WriteLine("Press \"s\" カテゴリを選択し記事一覧を取得");
-            Console.WriteLine("Press \"b\" コラム(ブログ)タイトル一覧を初期化");
-            Console.WriteLine("Press \"c\" カテゴリ一覧を初期化");
-
-            string input = Console.ReadLine();
-            switch (input)
+            if (LastParentUrl == null)
             {
-                case "s":
-                    SelectCategory();
-                    break;
-                case "b":
-                    InitBlogTable();
-                    break;
-                case "c":
-//                    InitCategoryTable(AbotTest.Program.Blogs);
-                    break;
-                default:
-                    break;
-                
+                LastParentUrl = PAGEURL;
             }
+            string uri;
 
 
+            Console.WriteLine("直近のセッションの最後のURLのからクローリングを続ける : press Y \n " +
+                "Root URLからクローリングを開始する ： press any key \n"  );
+            if (Console.ReadLine() == "Y")
+            {
+                uri = Program.LastParentUrl;
+            }           
+            else uri = PAGEURL;
+
+            Console.WriteLine($"{uri} からクローリングを開始します");
+
+            return uri;
         }
 
-        private void SelectCategory()
+        static private void SelectCategory()
         {
             throw new NotImplementedException();
         }
 
-        public void InitCategoryTable(List<Category> categories)
+        public static void InitCategoryTable(List<Category> categories)
         {
             Console.WriteLine("カテゴリのテーブルを更新しますか(一度削除します) 了承する場合は y を入力");
             var confirmation = Console.ReadLine();
@@ -54,12 +50,12 @@ namespace AbotTest
             }
         }
 
-        public void InitBlogTable()
+        public static void InitBlogTable()
         {
             ///Initialize blog table
         }
 
-        public void BeginCrawling()
+        public static void BeginCrawling()
         {
 
         }

@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Configuration;
 
-namespace AbotTest
+namespace WebScraper
 {
    
     public class DaoArticle
