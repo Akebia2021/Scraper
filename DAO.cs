@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Configuration;
 
 namespace AbotTest
 {
@@ -17,15 +18,16 @@ namespace AbotTest
         {
 
 
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
 
+
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
             {
                 conn.Open();
                 foreach (Article article in articles) {
-                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date, modified_date) VALUES ({article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}', '{article.ModifiedDate})");
+                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date, modified_date) VALUES ({article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}')");
                     var cmd = new MySqlCommand(sql, conn);
                     cmd.ExecuteNonQuery();
 
@@ -70,7 +72,7 @@ namespace AbotTest
 
         public static bool InsertUrls(List<string> freshUrls)
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -100,7 +102,7 @@ namespace AbotTest
         {
 
 
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -130,7 +132,7 @@ namespace AbotTest
 
         public static bool TruncateUrlTable()
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -154,12 +156,41 @@ namespace AbotTest
 
     }
 
+    public class DaoUrlLastVisited
+    {
+
+        public static bool InsertUrl(string url)
+        {
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                
+                    string sql = string.Format($"INSERT INTO url_last_visited (url) VALUE ('{url}')");
+                    MySqlCommand cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+                
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+            }
+        }        
+    }
+
 
     public class DaoCategory
     {
         public static bool InitCategoryDB(List<Category> categories)
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -187,7 +218,7 @@ namespace AbotTest
         public static List<Category> GetAllCategory()
         {
             List<Category> categories = new List<Category>();
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -225,7 +256,7 @@ namespace AbotTest
     {
         public static bool InitBlogDB(List<Blog> blogs)
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -254,7 +285,7 @@ namespace AbotTest
         public static List<Blog> GetAllBlogs()
         {
             List<Blog> blogs = new List<Blog>();
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -294,7 +325,7 @@ namespace AbotTest
     {
         public static bool InsertAuthor(Author author)
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -319,7 +350,7 @@ namespace AbotTest
 
         public static bool InsertAllAuthors(List<Author> authors)
         {
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try
@@ -349,7 +380,7 @@ namespace AbotTest
         public static List<Author> GetAllAuthors()
         {
             List<Author> authors = new List<Author>();
-            string connStr = "server=localhost;user=root;database=news_data_pool;port=3306;password=3056jjjjj";
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
 
             try

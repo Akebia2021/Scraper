@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AngleSharp.XPath;
 using static AbotTest.UtilityForNewsWeek;
-
+using System.Configuration;
 
 namespace AbotTest
 {
@@ -24,37 +24,57 @@ namespace AbotTest
     {
         public const string PAGEURL = "https://www.newsweekjapan.jp";
 
+        public static string LastParentUrl { get; set; }
+
         public static List<Article> Articles = new List<Article>();
         public static List<Author> Authors;
         public static List<Blog> Blogs = new List<Blog>();
-        public static List<Category> Categories;
-        static List<string> KnownUrls = new List<string>();
+        public static List<Category> Categories;    
         static List<string> CategoryPaths = new List<string>();
 
-        private static int urlAddedCount = 0;
-        private static readonly int urlAddedCountMax = 25;
+        //既知のURLを格納するリスト。Program起動時にDBのurlテーブルをそのままこれに格納
+        static List<string> KnownUrls = new List<string>();
+   
+
+        //新しいURLを指定した回数取得する度にデータベースへ接続し、Articles リストをDBに格納
+        //毎回DBにに接続すると負荷が高いので。
+        private static int NewUrlsCount = 0;
+        private static readonly int MaxUrlsCountAddOnce = 5;
 
 
         static async Task Main(string[] args)
         {
-            Console.WriteLine("specify root URI...");
-            string uri = Console.ReadLine();
-            
+            if (LastParentUrl == null)
+            {
+                LastParentUrl = PAGEURL;
+            }
+            string uri;
+
+
+            Console.WriteLine("直近のセッションの最後のURLのからクローリングを続ける。press Y \n " +
+                "Root URLからクローリングを開始。press any key");
+            if (Console.ReadLine() == "Y")
+            {
+                uri = Program.LastParentUrl;
+            }
+            else uri = PAGEURL;
+
+            Console.WriteLine($"{uri} からクローリングを開始します");
+
+
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .WriteTo.Console()
                 .CreateLogger();
 
-            Log.Logger.Information("Demo starting up!");
 
-            InitProgram();
-         
-            
-             await DemoSimpleCrawler(uri);
+             InitProgram();
+
+            Console.WriteLine("hello");
+            //await DemoSimpleCrawler(uri);
 
 
-            DaoUrl.TruncateUrlTable();
-            DaoUrl.InsertUrls(KnownUrls);
+            RefreshUrlTable(ref KnownUrls);
 
         }
 
@@ -99,11 +119,11 @@ namespace AbotTest
         {
             var config = new CrawlConfiguration
             {
-                MaxPagesToCrawl = 100,          
+                MaxPagesToCrawl = 50,          
                 MinCrawlDelayPerDomainMilliSeconds = 1000,
                 CrawlTimeoutSeconds = 500,
-                MaxConcurrentThreads = 10,
-                MaxCrawlDepth = 10,
+                MaxConcurrentThreads = 2,
+                MaxCrawlDepth = 1000,
             //crawlConfig.ConfigurationExtensions.Add("SomeCustomConfigValue1", "1111"),
             //crawlConfig.ConfigurationExtensions.Add("SomeCustomConfigValue2", "2222"),
 
@@ -129,63 +149,99 @@ namespace AbotTest
         /// <param name="e"></param>
         private static void crawler_ProcessPageCrawlCompleted(object sender, PageCrawlCompletedArgs e)
         {
+            
+
             CrawledPage crawledPage = e.CrawledPage;
+            bool IsNewUrl = false;
 
-            //if (crawledPage.HttpRequestException != null || crawledPage.HttpResponseMessage.StatusCode != HttpStatusCode.OK)
-            //{
-            //    Console.WriteLine("Crawl of page failed {0}", crawledPage.Uri.AbsoluteUri);
-
-            //}
-            //else
-            //{
-            Console.WriteLine("Crawl of page succeeded {0}", crawledPage.Uri.AbsoluteUri);
-            var absolutePath = e.CrawledPage.Uri.AbsolutePath.ToString();
-
-            var doc = e.CrawledPage.AngleSharpHtmlDocument;
-
-            //既出のURLである場合は処理をスキップ
-            if (KnownUrls.Contains(absolutePath))
+            if (crawledPage.HttpRequestException != null || crawledPage.HttpResponseMessage.StatusCode != HttpStatusCode.OK)
             {
-                Log.Logger.Information($"It is already known url:{absolutePath}");
+                Console.WriteLine("Crawl of page failed {0}", crawledPage.Uri.AbsoluteUri);
+
             }
             else
             {
-                KnownUrls.Add(absolutePath);
-                urlAddedCount++;
+                Console.WriteLine("Crawl of page succeeded {0}", crawledPage.Uri.AbsoluteUri);
+                var absolutePath = e.CrawledPage.Uri.AbsolutePath.ToString();
 
+                var doc = e.CrawledPage.AngleSharpHtmlDocument;
 
-
-                //ArticleのScrapingを始める条件は、Pagenationの1ページ目であり、カテゴリかブログに所属していること。
-                if (IfArticleAndIfFirstPage(e.CrawledPage, doc)
-                    &&( CanCategorize(CategoryPaths, absolutePath)
-                    || IsBlogEntry(Blogs, absolutePath)))
+                //既出のURLである場合は処理をスキップ
+                if (KnownUrls.Contains(absolutePath))
                 {
-                    //執筆者名から既出判定に従いデータベースを更新
-                    string authorName = Scraper.ScrapeAuthorName(e.CrawledPage);
-                    if (IsNewAuthor(Authors, authorName))
+                    Log.Logger.Information($"It is already known url　　:　　{absolutePath}");
+                }
+                else
+                {
+                    LastParentUrl = e.CrawledPage.ParentUri.ToString();
+                    Debug.WriteLine(LastParentUrl);
+                    IsNewUrl = true;
+                }
+
+
+                if(IsNewUrl)
+                {
+                    KnownUrls.Add(absolutePath);
+                    NewUrlsCount++;
+
+                    //ArticleのScrapingを始める条件は、Pagenationの1ページ目であり、カテゴリかブログに所属していること。
+                    if (IfArticleAndIfFirstPage(e.CrawledPage, doc)
+                        && (CanCategorize(CategoryPaths, absolutePath)
+                        || IsBlogEntry(Blogs, absolutePath)))
                     {
-                        Author author = new Author() { AuthorName = authorName };
-                        DaoAuthor.InsertAuthor(author);
-                        Authors = DaoAuthor.GetAllAuthors();
+                        Console.WriteLine($"記事本文のスクレイピングを開始します: {absolutePath}");
+
+
+                        Article article = Scraper.ScrapeArticle(absolutePath);
+
+                        Debug.WriteLine("AuthorIdの決定とAuthor　Listの更新を行います。");
+                        var authorName = Scraper.ScrapeAuthorName(e.CrawledPage);
+                        if (authorName != null)
+                        {
+                            if (IsNewAuthor(ref Program.Authors, authorName))
+                            {
+                                Author author = new Author() { AuthorName = authorName };
+                                DaoAuthor.InsertAuthor(author);
+                                Authors = DaoAuthor.GetAllAuthors();
+                            }
+                            var authorIndex = Authors.FindIndex(n => n.AuthorName.Equals(authorName));
+                            article.AuthorId = Authors[authorIndex].AuthorId;
+
+                        }
+                        else
+                        {
+                            article.AuthorId = null;
+                        }
+                       
                     }
-                    
-                    Article article = Scraper.ScrapeArticle(absolutePath);
 
-                    var authorIndex = Authors.FindIndex(n => n.AuthorName.Equals(authorName));
-                    article.AuthorId = Authors[authorIndex].AuthorId;                    
+                    //URLカウントがMaxに達したらデータベースを更新しカウントをリセット
+                    if (NewUrlsCount >= MaxUrlsCountAddOnce)
+                    {
+                        RefreshUrlTable(ref KnownUrls);
+                        NewUrlsCount = 0;
+                        if (DaoArticle.InsertArticles(Articles))
+                        {
+                            //NewUrlsCountを0に戻すのと同様にこれも空にする。
+                            Articles = new List<Article>();
+                            Console.WriteLine("DBへArticle listを追加しました");
+                        }
+                        else
+                        {
+                            Console.WriteLine("DBへのArticle listの追加に失敗しました");
+                        }
+                    }
+
                 }
-
-                if(urlAddedCount >= urlAddedCountMax)
-                {
-                    DaoArticle.InsertArticles(Articles);
-                    DaoUrl.InsertUrls(KnownUrls);
-                    
-                }
-
             }
     
             if (string.IsNullOrEmpty(crawledPage.Content.Text))
                 Console.WriteLine("Page had no content {0}", crawledPage.Uri.AbsoluteUri);
+
+            if (crawledPage.Uri.ToString().Equals(crawledPage.ParsedLinks.FirstOrDefault()))
+            {
+                DaoUrlLastVisited.InsertUrl(crawledPage.Uri.ToString());
+            }
 
            
             //var htmlAgilityPackDocument = crawledPage.AngleSharpHtmlDocument; //Html Agility Pack parser
@@ -260,13 +316,20 @@ namespace AbotTest
             return true;
         }
 
-        public static bool IsNewAuthor(List<Author> authors, string name)
+        public static bool IsNewAuthor(ref List<Author> authors, string name)
         {
-            foreach(Author author in authors)
+
+            var authorIndex = authors.FindIndex(n => n.AuthorName.Equals(name));
+            if (authorIndex > 0)
             {
-                if (author.AuthorName.Equals(name)) return false;
+                return true;
             }
-            return true;
+            else return false;
+        }
+
+        public static int GetAuthorIndex(ref List<Author> authors, string name)
+        {
+            return  authors.FindIndex(n => n.AuthorName.Equals(name));
         }
                 
 
@@ -339,6 +402,22 @@ namespace AbotTest
 
             return categories;
 
+        }
+
+        
+
+        /// <summary>
+        /// urlテーブルを一度削除して、新たに更新する
+        /// </summary>
+        /// <param name="urls"></param>
+        public static void RefreshUrlTable(ref List<string> urls)
+        {
+            DaoUrl.TruncateUrlTable();
+
+            var noDupes = urls.Distinct().ToList();
+
+            if (DaoUrl.InsertUrls(noDupes)) Console.WriteLine("新たにURLをDBに追加しました。");
+            else Console.WriteLine("DBへのURLの追加に失敗しました。");
         }
 
 
