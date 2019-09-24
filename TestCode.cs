@@ -28,6 +28,9 @@ namespace WebScraper
             urls.Add("https://www.newsweekjapan.jp/stories/english/");
             urls.Add("https://www.newsweekjapan.jp/stories/carrier/2018/03/post-9790.php");
             urls.Add("https://www.newsweekjapan.jp/stories/woman/2019/09/sns-3_2.php");
+            urls.Add("https://www.newsweekjapan.jp/stories/world/2019/09/post-13033.php");
+            urls.Add("https://www.newsweekjapan.jp/stories/world/2019/09/post-13026.php");
+            urls.Add("https://www.newsweekjapan.jp/stories/woman/2019/09/sns-3.php");
 
 
             // await DemoSimpleCrawler(urls[0]);
@@ -37,9 +40,22 @@ namespace WebScraper
             foreach(string s in urls)
             {
                 CrawledPage crawledPage = await DemoSinglePageRequest(s);
-                if(IsArticleFirstPage(crawledPage)) articles.Add(Scraper.ScrapeArticle(crawledPage, Program.Categories, Program.Blogs));
+
+                if (IsArticleFirstPage(crawledPage))
+                {
+                    Console.WriteLine("記事のスクレイピングを初めます");
+                    var authorName = Scraper.ScrapeAuthorName(crawledPage);
+                    if (authorName == null) authorName = "No Name";
+                    Console.WriteLine("Author Name is ： " + authorName);
+                    if (IsNewAuthor(ref Program.Authors, authorName))
+                    {
+                        Program.Authors.Add(new Author() { AuthorName = authorName });
+                        DaoAuthor.InsertAuthor(new Author() { AuthorName = authorName });
+                    }
+                    articles.Add(Scraper.ScrapeArticle(crawledPage, Program.Categories, Program.Blogs, Program.Authors));
+                }
             }
-            foreach (Article a in articles) Console.WriteLine($"title {a.Title}, category id {a.CategoryId}, date {a.PublishDate}, url {a.Url}");
+            foreach (Article a in articles) Console.WriteLine($"title {a.Title},author id {a.AuthorId},  category id {a.CategoryId}, date {a.PublishDate}, url {a.Url}");
 
           
 

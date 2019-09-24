@@ -34,8 +34,7 @@ namespace WebScraper
     {
         public int AuthorId { get; set; }
         public string AuthorName { get; set; }
-        public string AuthorDescription { get; set; } //nullあり
-        public string BlogId { get; set; } //nullあり
+      
     }
 
     public class Blog

@@ -14,11 +14,37 @@ namespace WebScraper
     public class DaoArticle
     {
 
-        public static bool InsertArticles(List<Article> articles)
+        public static bool InsertArticle(Article article)
         {
 
 
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
+            MySqlConnection conn = new MySqlConnection(connStr);
 
+            try
+            {
+                conn.Open();
+                
+                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date) VALUES ('{article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}')");
+                    var cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+                                
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+            }
+
+
+        }
+
+        public static bool InsertArticles(List<Article> articles)
+        {
+                       
 
             string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
@@ -69,6 +95,32 @@ namespace WebScraper
 
     public class DaoUrl
     {
+        public static bool InsertUrl(string url)
+        {
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                
+                    string sql = string.Format($"INSERT INTO url (url) VALUE ('{url}')");
+                    MySqlCommand cmd = new MySqlCommand(sql, conn);
+                    cmd.ExecuteNonQuery();
+                
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+            }
+
+
+        }
 
         public static bool InsertUrls(List<string> freshUrls)
         {
@@ -163,15 +215,12 @@ namespace WebScraper
         {
             string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
             MySqlConnection conn = new MySqlConnection(connStr);
-
             try
             {
-                conn.Open();
-                
+                conn.Open();                
                     string sql = string.Format($"INSERT INTO url_last_visited (url) VALUE ('{url}')");
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
-                    cmd.ExecuteNonQuery();
-                
+                    cmd.ExecuteNonQuery();                
 
                 conn.Close();
                 return true;
@@ -182,7 +231,30 @@ namespace WebScraper
                 Log.Logger.Information(e.ToString());
                 return false;
             }
-        }        
+        }
+
+        public static bool TruncateUrlLastVisited()
+        {
+            string connStr = ConfigurationManager.ConnectionStrings["DB1"].ConnectionString;
+            MySqlConnection conn = new MySqlConnection(connStr);
+
+            try
+            {
+                conn.Open();
+                string sql = string.Format($"truncate table url_last_visited");
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                cmd.ExecuteNonQuery();
+
+                conn.Close();
+                return true;
+            }
+            catch (Exception e)
+            {
+                conn.Close();
+                Log.Logger.Information(e.ToString());
+                return false;
+            }
+        }
     }
 
 

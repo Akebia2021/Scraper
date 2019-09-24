@@ -46,18 +46,18 @@ namespace WebScraper
         static async Task Main(string[] args)
         {
          
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Information()
-                .WriteTo.Console()
-                .CreateLogger();
+            //Log.Logger = new LoggerConfiguration()
+            //    .MinimumLevel.Information()
+            //    .WriteTo.Console()
+            //    .CreateLogger();
 
             InitProgram();
-            //string uri = Presentation.DecideStartUrl();
-            //await DemoSimpleCrawler(uri);
+            string uri = Presentation.DecideStartUrl();
+            await DemoSimpleCrawler(uri);
 
 
-            //RefreshUrlTable(ref KnownUrls);
-            await Test.TestCode();
+            RefreshUrlTable(ref KnownUrls);
+            //await Test.TestCode();
 
         }
 
@@ -67,8 +67,16 @@ namespace WebScraper
             DaoUrl.GetAllKnownUrls(ref KnownUrls);
             Debug.WriteLine("Known urls are loaded from the database");
 
-            //既知のAuthorをデータベースからロード
+            //既知のAuthorをデータベースからロード. No name がなければテーブルに追加           
             Authors = DaoAuthor.GetAllAuthors();
+            if (Authors == null) Authors.Add(new Author() { AuthorName = "" });
+            var q = from x in Authors
+                    where x.AuthorName.Equals("No Name")
+                    select x;
+            if(q.Count() == 0)
+            {
+                DaoAuthor.InsertAuthor(new Author() { AuthorName = "No Name" });
+            }
 
             Blogs = DaoBlog.GetAllBlogs();
             if (Blogs.Count == 0)
@@ -134,25 +142,32 @@ namespace WebScraper
             
 
             CrawledPage crawledPage = e.CrawledPage;
-            
-            //KnownUrlsをDBに書き込み、ArticlesをDBに書き込む
-            //ParentUrlが変わるごとに更新
-            if(LastParentUrl != crawledPage.ParentUri.ToString())
+            bool IsNewUrl = false;
+
+            //一層下に潜るごとにKnownUrlsをDBに書き込み、ArticlesをDBに書き込む            
+            if (LastParentUrl != crawledPage.ParentUri.ToString())
             {
                 LastParentUrl = crawledPage.ParentUri.ToString();
+                DaoUrlLastVisited.TruncateUrlLastVisited();
                 DaoUrlLastVisited.InsertUrl(LastParentUrl);
+
                 RefreshUrlTable(ref KnownUrls); //KnowUrlsは差分ではなく全体を持っているので、初期化する必要はない
-                if (DaoArticle.InsertArticles(Articles))
-                {
-                    Articles = new List<Article>();
-                    Console.WriteLine("DBへArticle listを追加しました");
-                }
-                else
-                {
-                    Console.WriteLine("DBへのArticle listの追加に失敗しました");
-                }
+
+                
+                //Listの途中まで追加したところで失敗になることがある（要改良）
+                //一旦コメントアウト、一つづつ追加することにする
+                //if (DaoArticle.InsertArticles(Articles))
+                //{
+                //    Articles = new List<Article>();
+                //    Console.WriteLine("DBへArticle listを追加しました");
+                //}
+                //else
+                //{
+                //    Console.WriteLine("DBへのArticle listの追加に失敗しました");
+                //}
             }
-            bool IsNewUrl = false;
+
+            
 
             if (crawledPage.HttpRequestException != null || crawledPage.HttpResponseMessage.StatusCode != HttpStatusCode.OK)
             {
@@ -176,51 +191,35 @@ namespace WebScraper
                 //未知のURLであればスクレイピングにはいる
                 if(IsNewUrl)
                 {
-                    KnownUrls.Add(absolutePath);
-                   
+                    //KnownUrls.Add(absolutePath);
+                    DaoUrl.InsertUrl(crawledPage.Uri.ToString());
 
                     //判定が甘い可能性がある
                     if (IsArticleFirstPage(crawledPage))
                     {
-                        Console.WriteLine($"記事本文のスクレイピングを開始します: {absolutePath}");
-                        Console.WriteLine(Scraper.ScrapeTitle(crawledPage));
+                        Console.WriteLine("記事のスクレイピングを初めます");
+                        var authorName = Scraper.ScrapeAuthorName(crawledPage);
+                        if (authorName == null) authorName = "No Name";
+                        Console.WriteLine("Author Name is ： " + authorName);
+                        if (IsNewAuthor(ref Program.Authors, authorName))
+                        {
+                            Program.Authors.Add(new Author() { AuthorName = authorName });
+                            DaoAuthor.InsertAuthor(new Author() { AuthorName = authorName });
+                        }
+                        //リストに一時保存する方式
+                        //Articles.Add(Scraper.ScrapeArticle(crawledPage, Program.Categories, Program.Blogs, Program.Authors));
 
-                        //Article article = Scraper.ScrapeArticle(absolutePath);
-
-                        //Debug.WriteLine("AuthorIdの決定とAuthor　Listの更新を行います。");
-                        //var authorName = Scraper.ScrapeAuthorName(e.CrawledPage);
-                        //if (authorName != null)
-                        //{
-                        //    if (IsNewAuthor(ref Program.Authors, authorName))
-                        //    {
-                        //        Author author = new Author() { AuthorName = authorName };
-                        //        DaoAuthor.InsertAuthor(author);
-                        //        Authors = DaoAuthor.GetAllAuthors();
-                        //    }
-                        //    var authorIndex = Authors.FindIndex(n => n.AuthorName.Equals(authorName));
-                        //    article.AuthorId = Authors[authorIndex].AuthorId;
-
-                        //}
-                        //else
-                        //{
-                        //    article.AuthorId = null;
-                        //}
-                       
+                        //直接Insertする方式
+                        Article article = Scraper.ScrapeArticle(crawledPage, Program.Categories, Program.Blogs, Program.Authors);
+                        if (DaoArticle.InsertArticle(article)) Console.WriteLine("an article added to db"); ;
                     }
-
-
                 }
             }
     
             if (string.IsNullOrEmpty(crawledPage.Content.Text))
                 Console.WriteLine("Page had no content {0}", crawledPage.Uri.AbsoluteUri);
 
-            if (crawledPage.Uri.ToString().Equals(crawledPage.ParsedLinks.FirstOrDefault()))
-            {
-                DaoUrlLastVisited.InsertUrl(crawledPage.Uri.ToString());
-            }
-
-           
+                     
             //var htmlAgilityPackDocument = crawledPage.AngleSharpHtmlDocument; //Html Agility Pack parser
             //var angleSharpHtmlDocument = crawledPage.AngleSharpHtmlDocument; //AngleSharp parser
             

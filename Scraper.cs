@@ -20,17 +20,16 @@ namespace WebScraper
      public static class Scraper
     {
         
+        
 
-
-        public static Article ScrapeArticle(CrawledPage crawled, List<Category> categories, List<Blog> blogs)
+        public static Article ScrapeArticle(CrawledPage crawled, List<Category> categories, List<Blog> blogs, List<Author> authors)
         {
 
             Article article = new Article();
 
             //extract title
             article.Title = ScrapeTitle(crawled);
-            article.AuthorId = 232;
-            //article.AuthorId = CaluculateAuthorId(crawled);
+            article.AuthorId = CalcurateAuthorId(crawled, authors);
             article.CategoryId = CalculateCategoryId(crawled, categories, blogs);
             article.BlogId = CalculateBlogId(crawled, blogs);
             article.PublishDate = ScrapePublishDate(crawled);
@@ -95,12 +94,26 @@ namespace WebScraper
         }
 
 
-
+        /// <summary>
+        /// 要素がなければnullを返す
+        /// </summary>
+        /// <param name="crawledPage"></param>
+        /// <returns></returns>
         public static string ScrapeAuthorName(CrawledPage crawledPage)
         {
             var doc = crawledPage.AngleSharpHtmlDocument;
             var node = doc.QuerySelector("div.author");
-            return node?.TextContent;
+            if (node != null)
+            {
+                return node.TextContent;
+            }
+            else if (doc.QuerySelector("meta[property = \"XenseParse:author\"]") != null)
+            {
+                var str = node.GetAttribute("content");
+                return str;
+            }
+            else return null;
+            
             
         }
 
@@ -194,11 +207,15 @@ namespace WebScraper
 
         }
 
+        //IsNewAuthor、Authors.Add の後で呼び出すので必ずIDを取得できる
         public static int CalcurateAuthorId(CrawledPage crawled, List<Author> authors)
         {
             string name = ScrapeAuthorName(crawled);
-
-            return 1;
+            if (name == null) name = "No Name";
+            var q = from a in authors
+                    where a.AuthorName.Equals(name)
+                    select a;
+            return q.First().AuthorId;
         }
 
 

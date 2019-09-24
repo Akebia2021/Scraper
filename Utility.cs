@@ -94,20 +94,14 @@ namespace WebScraper
 
         public static bool IsNewAuthor(ref List<Author> authors, string name)
         {
-
-            var authorIndex = authors.FindIndex(n => n.AuthorName.Equals(name));
-            if (authorIndex > 0)
-            {
-                return true;
-            }
+            var q = from a in authors
+                    where a.AuthorName.Equals(name)
+                    select a;
+            if (q.Count() == 0) return true;
             else return false;
         }
 
-        public static int GetAuthorIndex(ref List<Author> authors, string name)
-        {
-            return authors.FindIndex(n => n.AuthorName.Equals(name));
-        }
-
+       
 
 
         public static string GetNextPageUrl(string page)
@@ -143,11 +137,7 @@ namespace WebScraper
 
         }
 
-        //Urlが50個になったら一度データベースに入れる
-        public static void UpdateArticleDatabase(int count)
-        {
-
-        }
+       
 
 
 
