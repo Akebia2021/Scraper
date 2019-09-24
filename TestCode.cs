@@ -30,23 +30,20 @@ namespace WebScraper
             urls.Add("https://www.newsweekjapan.jp/stories/woman/2019/09/sns-3_2.php");
 
 
-           // await DemoSimpleCrawler(urls[0]);
+            // await DemoSimpleCrawler(urls[0]);
 
+            List<Article> articles = new List<Article>();
 
             foreach(string s in urls)
             {
                 CrawledPage crawledPage = await DemoSinglePageRequest(s);
-                Console.WriteLine(ScrapeTitle(crawledPage));
-                Console.WriteLine(IsArticleFirstPage(crawledPage));
-                Console.WriteLine("Category id is : " + Scraper.CalculateCategoryId(crawledPage, Program.Categories, Program.Blogs));
-                Console.WriteLine("Blog id is : " + Scraper.CalculateBlogId(crawledPage, Program.Blogs));
-
-                
-
+                if(IsArticleFirstPage(crawledPage)) articles.Add(Scraper.ScrapeArticle(crawledPage, Program.Categories, Program.Blogs));
             }
-
+            foreach (Article a in articles) Console.WriteLine($"title {a.Title}, category id {a.CategoryId}, date {a.PublishDate}, url {a.Url}");
 
           
+
+
         }
 
         private static async Task<CrawledPage> DemoSinglePageRequest(string uri)

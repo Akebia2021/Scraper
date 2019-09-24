@@ -16,7 +16,7 @@ namespace WebScraper
       //  public DateTime ModifiedDate { get; set; }
         public string Url { get; set; }
 
-        public int CategoryId { get; set; }
+        public int? CategoryId { get; set; } //本当はnullはダメ。
         public int? AuthorId { get; set; }
         public int? BlogId { get; set; }
 

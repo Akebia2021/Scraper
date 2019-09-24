@@ -114,17 +114,12 @@ namespace WebScraper
         {
             HtmlWeb web = new HtmlWeb();
             var doc = web.Load(page);
-            var nextUrlNode = doc.DocumentNode.SelectSingleNode("//li[@class = 'next']");
+            var nextUrlNode = doc.DocumentNode.SelectSingleNode("//*[@id='content']//li[@class='next']/a");
 
-            if (nextUrlNode == null)
-            {
-                return null;
-
-            }
-            else if (nextUrlNode.FirstChild.NextSibling.Name == "a")
+            if (nextUrlNode != null)
             {
                 string formerUrl = page;
-                page = nextUrlNode.FirstChild.NextSibling.GetAttributeValue("href", null);
+                page = nextUrlNode.GetAttributeValue("href", null);
 
                 //次ページへのリンクが https で始まっていない場合は末尾の置換が必要
                 if (!page.StartsWith("http"))
@@ -144,7 +139,6 @@ namespace WebScraper
 
             }
             else return null;
-
 
 
         }

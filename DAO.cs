@@ -27,7 +27,7 @@ namespace WebScraper
             {
                 conn.Open();
                 foreach (Article article in articles) {
-                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date, modified_date) VALUES ({article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}')");
+                    string sql = string.Format($"INSERT INTO article (title, contents, url, category_id, author_id, publish_date) VALUES ('{article.Title}', '{article.Contents}', '{article.Url}', '{article.CategoryId}', '{article.AuthorId}', '{article.PublishDate}')");
                     var cmd = new MySqlCommand(sql, conn);
                     cmd.ExecuteNonQuery();
 
@@ -332,7 +332,7 @@ namespace WebScraper
             {
                 conn.Open();
                 
-                    string sql = string.Format($"INSERT INTO author (name, description) VALUES ('{author.AuthorName}', '{author.AuthorDescription}')");
+                    string sql = string.Format($"INSERT INTO author (name) VALUE ('{author.AuthorName}')");
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
                     cmd.ExecuteNonQuery();
 
@@ -358,7 +358,7 @@ namespace WebScraper
                 conn.Open();
                 foreach(Author author in authors)
                 {
-                    string sql = string.Format($"INSERT INTO author (name, description) VALUES ('{author.AuthorName}', '{author.AuthorDescription}')");
+                    string sql = string.Format($"INSERT INTO author (name) VALUE ('{author.AuthorName}')");
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
                     cmd.ExecuteNonQuery();
 
@@ -395,8 +395,7 @@ namespace WebScraper
                     Author author = new Author()
                     {
                         AuthorId = int.Parse(reader.GetString(0)),
-                        AuthorName = reader.GetString(1),
-                        AuthorDescription = reader.GetString(2)
+                        AuthorName = reader.GetString(1)                        
                     };
                     authors.Add(author);
                 }

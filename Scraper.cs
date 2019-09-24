@@ -19,9 +19,26 @@ namespace WebScraper
 {
      public static class Scraper
     {
-        public static void ScrapePage(Predicate<CrawledPage> predicate)
+        
+
+
+        public static Article ScrapeArticle(CrawledPage crawled, List<Category> categories, List<Blog> blogs)
         {
-            
+
+            Article article = new Article();
+
+            //extract title
+            article.Title = ScrapeTitle(crawled);
+            article.AuthorId = 232;
+            //article.AuthorId = CaluculateAuthorId(crawled);
+            article.CategoryId = CalculateCategoryId(crawled, categories, blogs);
+            article.BlogId = CalculateBlogId(crawled, blogs);
+            article.PublishDate = ScrapePublishDate(crawled);
+            article.Contents = ScrapeContents(crawled);
+            article.Url = crawled.Uri.ToString();
+
+
+            return article;
         }
 
 
@@ -47,110 +64,52 @@ namespace WebScraper
             }
             return blogs;
 
-        }
-
-        /// <summary>
-        /// 記事のurl (.php)から記事、著者名などを取得。
-        /// 一番最初のページであることを確認し、最後のページまでたどっていく。
-        /// </summary>
-        /// <param name="absolutePath"></param>
-        /// <returns></returns>
-        public static Article ScrapeArticle(CrawledPage crawled)
+        }          
+               
+        public static string ScrapeContents(CrawledPage crawled)
         {
-           
-            Article article = new Article();
-
-            //extract title
-            article.Title = ScrapeTitle(crawled);
-
-            ////extract author and set AuthorId(nullable)
-            //string authorName = Scraper.ScrapeAuthorName(node);
-            //if (authorName == null) article.AuthorId = null;
-            //else
-            //{
-            //    var authorIndex = GetAuthorIndex(ref Program.Authors, authorName);
-            //    if (authorIndex > 0) article.AuthorId = Program.Authors[authorIndex].AuthorId;
-            //    Debug.WriteLine("作者がAuthor Listにはありません");
-            //}
-            //var authorName = ScrapeAuthorName(node);
-            //if(IsNewAuthor(AbotTest.Program.Authors, authorName))
-
-
-            //extract article's date
-            string dateSource = crawled.AngleSharpHtmlDocument.Body.SelectSingleNode("//div[@class = 'entryDetailData']/div[@class = 'date']")
-                ?.TextContent;
-            DateTime publishedTime;
-            if (FormatToDateTime(dateSource, out publishedTime)){ }
-            else
+            string url = crawled.Uri.ToString();
+            HtmlWeb web;
+            string result = null;
+            while (url != null)
             {
-                Console.WriteLine("ScrapeArticle Method was turminated");
-                return null;
+
+                web = new HtmlWeb();
+                var doc = web.Load(url);
+                var node = doc.DocumentNode.SelectSingleNode("//div[@class = 'entryDetailBodyBlock']");
+                //パースできない記事があったら　if を単に増やしていく
+                if(node == null) node = doc.DocumentNode.SelectSingleNode("//div[@class = 'entryDetailBodyCopy']");
+                if (node != null)
+                {
+                    var nodes = node.SelectNodes("p | h4");
+                    foreach (HtmlNode p in nodes)
+                    {
+                        result += p.InnerText;
+                        result += "\n";
+                    }
+                }
+                url = Utility.GetNextPageUrl(url);
+                
             }
-            article.PublishDate = publishedTime;           
-                    //publishとmodifiedの情報を持たない記事があるので
-                    //extract publish date
-                    //article.PublishDate = FormatToDateTime(node.SelectSingleNode("html/head/meta[@property= 'article:published_time']")
-                    //    .GetAttributeValue("content", "no datetime"));
-
-                    ////extract modified date
-                    //article.ModifiedDate = FormatToDateTime(node.SelectSingleNode("html/head/meta[@property= 'article:modified_time']")
-                    //    .GetAttributeValue("content", "no datetime"));
-
-            //determine category or blog
-            DeterminCategoryIdOrBlogId("", ref WebScraper.Program.Categories, ref WebScraper.Program.Blogs,  ref article);
-
-           
-            //extract contents
-            string result = "";
-            //while (url != null)
-            //{
-
-            //    web = new HtmlWeb();
-            //    var doc = web.Load(url);
-            //    node = doc.DocumentNode.SelectSingleNode("//div[@class = 'entryDetailBodyBlock']");
-
-
-
-            //    var nodes = node.SelectNodes("p | h4");
-            //    foreach (HtmlNode p in nodes)
-            //    {
-            //        result += p.InnerText;
-            //        result += "\n";
-            //    }
-            //    url = Utility.GetNextPageUrl(url);
-
-
-            //}
-            article.Contents = result;
-                                          
-            return article;
-            
+            return result;
         }
+
+
 
         public static string ScrapeAuthorName(CrawledPage crawledPage)
         {
             var doc = crawledPage.AngleSharpHtmlDocument;
             var node = doc.QuerySelector("div.author");
-            if (node == null) return null;
-            else return node.TextContent;
+            return node?.TextContent;
             
         }
-        public static string ScrapeAuthorName(HtmlNode node)
-        {
-            node = node.SelectSingleNode("//div[@class = 'author']");
-            if (node == null)
-            {
-                return null;
-            }
-            else return node.InnerText;
-        }
+
 
         /// <summary>
         /// 要素がなければNullを返す
         /// </summary>     
         public static string ScrapeTitle(CrawledPage crawled)
         {
-
             var node = crawled.AngleSharpHtmlDocument.Body.SelectSingleNode("//*[@id='content']/div[3]/div[2]/div[1]/div[1]/h3");
             if (node != null) return node.TextContent;
 
@@ -212,34 +171,36 @@ namespace WebScraper
             else return null;
         }
                       
-
-
+                       
         /// <summary>
-        /// 2019年9月17日（火）19時15分 のフォーマットをDateTimeに変換
+        /// パースに失敗したら DateTime.MaxValue を返す
         /// </summary>
-        /// <param name="source"></param>
-        /// <returns></returns>       
-        private static bool FormatToDateTime(string source, out DateTime date)
+        public static DateTime ScrapePublishDate(CrawledPage crawled)
         {
-            CultureInfo jaJP = new CultureInfo("ja-JP");
-            Regex reg = new Regex("（.）");
-            source = reg.Replace(source, "");          
+            DateTime date = DateTime.MaxValue;
+            string dateSource = crawled.AngleSharpHtmlDocument.Body.SelectSingleNode("//div[@class = 'entryDetailData']/div[@class = 'date']")
+                ?.TextContent.Trim();
+            if(dateSource != null)
+            {
+                Regex reg = new Regex("（.）");
+                var source = reg.Replace(dateSource, "");
+                string format = "yyyy年M月d日HH時mm分";
+                if (DateTime.TryParseExact(source, format, null, DateTimeStyles.None, out date)) { }
+               
+            }
 
-            string format = "yyyy年M月dd日HH時mm分";
-            
-            if (DateTime.TryParseExact(source, format, jaJP, DateTimeStyles.None, out date))
-            {
-                Debug.WriteLine("DateTime parsing was suceeded.");
-                return true;
-            }
-            else
-            {
-                Debug.WriteLine("DateTime parsing was failed.");
-                return false;
-              
-            }
-        
+            return date;
+           
+
         }
+
+        public static int CalcurateAuthorId(CrawledPage crawled, List<Author> authors)
+        {
+            string name = ScrapeAuthorName(crawled);
+
+            return 1;
+        }
+
 
     }
 }
