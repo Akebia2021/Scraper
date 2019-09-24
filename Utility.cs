@@ -52,11 +52,7 @@ namespace WebScraper
                
         /// <summary>
         /// .phpファイルでありなおかつ li class='prev' を持たないことで、記事の Pagination 1ページ目であることを確認する。
-        /// </summary>
-        /// <param name="crawledPage"></param>
-        /// <param name="doc"></param>
-        /// <returns></returns>
-        /// 
+        /// </summary>   
         public static bool IfArticleAndIfFirstPage(CrawledPage crawledPage, AngleSharp.Html.Dom.IHtmlDocument doc)
         {
 
@@ -133,14 +129,9 @@ namespace WebScraper
 
             }
             else return null;
-
-
         }
 
        
-
-
-
         public static List<Category> CreateCategoryList()
         {
             List<Category> categories = new List<Category>();

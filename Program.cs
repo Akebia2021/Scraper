@@ -34,14 +34,8 @@ namespace WebScraper
         static List<string> CategoryPaths = new List<string>();
 
         //既知のURLを格納するリスト。Program起動時にDBのurlテーブルをそのままこれに格納
-        static List<string> KnownUrls = new List<string>();
-   
-
-        //新しいURLを指定した回数取得する度にデータベースへ接続し、Articles リストをDBに格納
-        //毎回DBにに接続すると負荷が高いので。
-        //private static int NewUrlsCount = 0;
-        //private static readonly int MaxUrlsCountAddOnce = 5;
-
+        static List<string> KnownUrls = new List<string>();   
+            
 
         static async Task Main(string[] args)
         {
@@ -120,10 +114,7 @@ namespace WebScraper
 
             };
             var crawler = new PoliteWebCrawler(config);
-       
-
-
-           
+                  
             crawler.PageCrawlCompleted += crawler_ProcessPageCrawlCompleted;
           
             var crawlResult = await crawler.CrawlAsync(new Uri(uri));
@@ -133,13 +124,10 @@ namespace WebScraper
         
         
         /// <summary>
-        /// 読み込んだページの処理はここで完結させる
+        /// 読み込んだページの処理
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
         private static void crawler_ProcessPageCrawlCompleted(object sender, PageCrawlCompletedArgs e)
-        {
-            
+        {            
 
             CrawledPage crawledPage = e.CrawledPage;
             bool IsNewUrl = false;
@@ -153,18 +141,6 @@ namespace WebScraper
 
                 RefreshUrlTable(ref KnownUrls); //KnowUrlsは差分ではなく全体を持っているので、初期化する必要はない
 
-                
-                //Listの途中まで追加したところで失敗になることがある（要改良）
-                //一旦コメントアウト、一つづつ追加することにする
-                //if (DaoArticle.InsertArticles(Articles))
-                //{
-                //    Articles = new List<Article>();
-                //    Console.WriteLine("DBへArticle listを追加しました");
-                //}
-                //else
-                //{
-                //    Console.WriteLine("DBへのArticle listの追加に失敗しました");
-                //}
             }
 
             
